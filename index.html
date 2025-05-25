@@ -1,30 +1,109 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Ávila Cargas Rápidas</title>
-  <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-  <header>
-<img src="imagens/logo.png" alt="Logo Ávila Transportes" class="logo">
-    <nav>
-      <a href="index.html">Início</a>
-      <a href="sobre.html">Sobre</a>
-      <a href="servicos.html">Serviços</a>
-      <a href="contato.html">Contato</a>
-    </nav>
-  </header>
+// Estrutura principal em React com Tailwind + Rotas + Integrações básicas via WhatsApp
 
-  <main>
-    <h1>Ávila Cargas Rápidas</h1>
-    <p>Transporte com agilidade e confiança por todo o estado de São Paulo.</p>
-    <a href="https://wa.me/5517997835190" class="botao">Solicite uma Coleta</a>
-  </main>
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { useState } from "react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 
-  <footer>
-    <p>&copy; 2025 Ávila Transportes - Todos os direitos reservados</p>
-  </footer>
-</body>
-</html>
+function Home() {
+  return (
+    <div className="p-6">
+      <h1 className="text-3xl font-bold mb-4">Ávila Transportes</h1>
+      <p className="text-lg mb-2">Bem-vindo ao nosso sistema. Escolha uma opção no menu.</p>
+    </div>
+  );
+}
+
+function SolicitarColeta() {
+  const [form, setForm] = useState({ remetente: "", destino: "", volumes: "", valor: "", prazo: "", obs: "" });
+
+  const gerarLinkWhatsApp = () => {
+    const texto = `Nova Solicitação de Coleta:\nRemetente: ${form.remetente}\nDestino: ${form.destino}\nVolumes: ${form.volumes}\nValor: ${form.valor}\nPrazo: ${form.prazo}\nObservações: ${form.obs}`;
+    const link = `https://wa.me/55SEUNUMEROAQUI?text=${encodeURIComponent(texto)}`;
+    window.open(link, '_blank');
+  };
+
+  return (
+    <Card className="m-6">
+      <CardContent className="space-y-4">
+        <h2 className="text-2xl font-semibold">Solicitar Coleta</h2>
+        {Object.keys(form).map((key) => (
+          <Input
+            key={key}
+            placeholder={key.charAt(0).toUpperCase() + key.slice(1)}
+            value={form[key]}
+            onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+          />
+        ))}
+        <Button onClick={gerarLinkWhatsApp}>Enviar via WhatsApp</Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Rastreamento() {
+  const [codigo, setCodigo] = useState("");
+  const [status, setStatus] = useState(null);
+
+  const consultar = () => {
+    const statusFake = {
+      "ABC123": "Em trânsito para São José do Rio Preto",
+      "XYZ999": "Entregue em Ribeirão Preto em 24/05/2025"
+    };
+    setStatus(statusFake[codigo] || "Código não encontrado");
+  };
+
+  return (
+    <div className="p-6 space-y-4">
+      <h2 className="text-2xl font-semibold">Rastreamento</h2>
+      <Input placeholder="Digite o código" value={codigo} onChange={(e) => setCodigo(e.target.value)} />
+      <Button onClick={consultar}>Consultar</Button>
+      {status && <p className="text-lg font-medium">Status: {status}</p>}
+    </div>
+  );
+}
+
+function AreaRestrita({ tipo }) {
+  const [logado, setLogado] = useState(false);
+  const [senha, setSenha] = useState("");
+
+  if (!logado) {
+    return (
+      <div className="p-6">
+        <h2 className="text-xl mb-2">Área do {tipo}</h2>
+        <Input placeholder="Senha" type="password" value={senha} onChange={(e) => setSenha(e.target.value)} />
+        <Button className="mt-2" onClick={() => senha === "avila123" && setLogado(true)}>Entrar</Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6">
+      <h2 className="text-2xl font-semibold">Área do {tipo}</h2>
+      <p>Bem-vindo! Aqui ficará seu painel.</p>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <Router>
+      <div className="p-4 space-x-4 border-b">
+        <a href="/" className="text-blue-600">Início</a>
+        <a href="/coleta" className="text-blue-600">Solicitar Coleta</a>
+        <a href="/rastrear" className="text-blue-600">Rastreamento</a>
+        <a href="/cliente" className="text-blue-600">Área do Cliente</a>
+        <a href="/funcionario" className="text-blue-600">Área do Funcionário</a>
+      </div>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/coleta" element={<SolicitarColeta />} />
+        <Route path="/rastrear" element={<Rastreamento />} />
+        <Route path="/cliente" element={<AreaRestrita tipo="Cliente" />} />
+        <Route path="/funcionario" element={<AreaRestrita tipo="Funcionário" />} />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    </Router>
+  );
+}
