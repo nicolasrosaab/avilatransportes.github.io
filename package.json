@@ -1,0 +1,14 @@
+{
+  "name": "meu-projeto-vitepress",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "vitepress dev docs",
+    "build": "vitepress build docs",
+    "serve": "vitepress serve docs"
+  },
+  "dependencies": {
+    "vitepress": "^1.6.3",
+    "vue": "^3.4.15",
+    "@vue/server-renderer": "^3.4.15"
+  }
+}
