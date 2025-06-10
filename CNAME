@@ -1,1 +1,178 @@
 www.avilatransportes.com.br
+
+const axios = require('axios');
+const cheerio = require('cheerio');
+const { XMLParser } = require('fast-xml-parser');
+
+async function Instagram(url) {
+  if (!url) {
+    throw new Error('url mana?');
+  }
+
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Mobile Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+        'cache-control': 'max-age=0',
+        'dpr': '2',
+        'viewport-width': '980',
+        'sec-ch-ua': '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
+        'sec-ch-ua-mobile': '?1',
+        'sec-ch-ua-platform': '"Android"',
+        'sec-ch-ua-platform-version': '"15.0.0"',
+        'sec-ch-ua-model': '"25028RN03A"',
+        'sec-ch-ua-full-version-list': '"Chromium";v="136.0.7103.125", "Google Chrome";v="136.0.7103.125", "Not.A/Brand";v="99.0.0.0"',
+        'sec-ch-prefers-color-scheme': 'light',
+        'dnt': '1',
+        'upgrade-insecure-requests': '1',
+        'sec-fetch-site': 'same-origin',
+        'sec-fetch-mode': 'navigate',
+        'sec-fetch-user': '?1',
+        'sec-fetch-dest': 'document',
+        'accept-language': 'id-ID,id;q=0.9,en-US;q=0.8,en;q=0.7',
+        'priority': 'u=0, i'
+      },
+      timeout: 10000
+    });
+    
+    const $ = cheerio.load(response.data);
+    let scriptJson = null;
+
+    $('script[type="application/json"]').each((_, el) => {
+      const content = $(el).html();
+      if (content && content.includes('xdt_api__v1__media__shortcode__web_info')) {
+        try {
+          scriptJson = JSON.parse(content);
+        } catch (parseError) {
+          console.error('Emror:', parseError.message);
+        }
+      }
+    });
+
+    if (!scriptJson) {
+      throw new Error('tag script nya gada, cek lagi url lu ig reels apa bukan!');
+    }
+
+    const item = scriptJson.require?.[0]?.[3]?.[0]?.__bbox?.require?.[0]?.[3]?.[1]?.__bbox?.result?.data?.xdt_api__v1__media__shortcode__web_info?.items?.[0];
+
+    if (!item) {
+      throw new Error('Item reels gada');
+    }
+
+    const dashXml = item.video_dash_manifest;
+    if (!dashXml) {
+      throw new Error('xml gada');
+    }
+
+    const parser = new XMLParser({ ignoreAttributes: false });
+    let manifest;
+    
+    try {
+      manifest = parser.parse(dashXml);
+    } catch (xmlError) {
+      throw new Error('Gagal parsing DASH manifest', xmlError.message);
+    }
+
+    const period = manifest.MPD?.Period;
+    if (!period) {
+      throw new Error('tag gada di xml');
+    }
+
+    const adaptationSets = Array.isArray(period.AdaptationSet) ? period.AdaptationSet : [period.AdaptationSet];
+    let videoTracks = [];
+    let audioTracks = [];
+
+    adaptationSets.forEach((set, index) => {
+      if (!set) { 
+        console.warn(`Adaptation set ${index} null kalo gk ya undepined`);
+        return;
+      }
+
+      const isVideo = set['@_contentType'] === 'video';
+      const isAudio = set['@_contentType'] === 'audio';
+      const representations = Array.isArray(set.Representation) ? set.Representation : [set.Representation];
+
+      representations.forEach((rep, repIndex) => {
+        if (!rep) { 
+          console.warn(`Representation ${repIndex} set ${index} null or undepined`);
+          return;
+        }
+
+        try {
+          const baseURL = rep.BaseURL;
+          const bandwidth = parseInt(rep['@_bandwidth']) || 0;
+          const codecs = rep['@_codecs'] || '';
+          const mimeType = rep['@_mimeType'] || '';
+          const width = rep['@_width'];
+          const height = rep['@_height'];
+          const qualityLabel = rep['@_FBQualityLabel'] || '';
+
+          const track = {
+            url: baseURL,
+            bandwidth,
+            codecs,
+            mimeType,
+          };
+
+          if (isVideo) {
+            videoTracks.push({ 
+              ...track, 
+              resolution: `${width}x${height}`, 
+              qualityLabel 
+            });
+          } else if (isAudio) {
+            audioTracks.push(track);
+          }
+        } catch (trackError) {
+          console.error(`Error pas susun representation ${repIndex} set ${index}:`, trackError.message);
+        }
+      });
+    });
+
+    const title = item.caption?.text || '(Tidak ada caption)';
+    const thumbnails = (item.image_versions2?.candidates || []).map(img => ({
+      url: img.url,
+      width: img.width,
+      height: img.height,
+    }));
+
+    const profile = {
+      username: item.user?.username || '(tidak tersedia)',
+      full_name: item.user?.full_name || '',
+      profile_pic_url: item.user?.hd_profile_pic_url_info?.url || '',
+    };
+
+    const result = {
+      code: item.code,
+      id: item.id,
+      title,
+      profile,
+      thumbnails,
+      videoTracks,
+      audioTracks,
+    };
+    
+    return result;
+
+  } catch (error) {
+    console.error('Error message:', error.message);
+    
+    if (error.response) {
+      console.error('HTTP Status Text:', error.response.statusText);
+    }
+    
+    if (error.code) {
+      console.error('Error code:', error.code);
+    }
+    
+    console.error('Stack trace:', error.stack);
+    
+    throw error;
+  }
+}
+
+//Contoh Pake Gini
+//Instagram("https://www.instagram.com/reel/DFt_ud3ygZX/?utm_source=ig_web_copy_link&igsh=MzRlODBiNWFlZA==");
+
+module.exports = { Instagram };
